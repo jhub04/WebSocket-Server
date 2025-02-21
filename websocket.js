@@ -35,16 +35,21 @@ httpServer.listen(3000, () => {
 const wsServer = net.createServer((connection) => {
   console.log("Client connected");
 
-  connection.once("data", (data) => {
-    console.log("\nRecieved handshake request:\n", data.toString());
-    connection.write(performHandshake(data));
-  });
+  let isWebSocketUpgraded = false;
 
   connection.on("data", (data) => {
-    console.log("Data received from client:", data);
+    if (!isWebSocketUpgraded) {
+        console.log("\nReceived handshake request:\n", data.toString());
+        connection.write(performHandshake(data));
+        isWebSocketUpgraded = true;
+        return; // Do not process handshake data as a message
+    }
+
+    console.log("Raw WebSocket frame received:", data);
     const message = decodeWebSocketFrame(data);
     console.log("Decoded data from client:", message);
-  });
+    connection.write(encodeWebSocketFrame("Server received: " + message));
+});
 
   connection.on("end", () => {
     console.log("Client disconnected");
@@ -98,4 +103,28 @@ function performHandshake(data) {
     "Sec-WebSocket-Accept: " + acceptKey + "\r\n\r\n";
     
     return response;
+}
+
+function decodeWebSocketFrame(bytes) {
+    let length = bytes[1] & 127;
+    let maskStart = 2;
+    let dataStart = maskStart + 4;
+    let decodedMessage = "";
+
+    for (let i = dataStart; i < dataStart + length; i++) {
+        let byte = bytes[i] ^ bytes[maskStart + ((i - dataStart) % 4)];
+        decodedMessage += String.fromCharCode(byte);
+    }
+    return decodedMessage;
+}
+
+function encodeWebSocketFrame(message) {
+    const messageBuffer = Buffer.from(message, 'utf-8');
+    const frame = Buffer.alloc(2 + messageBuffer.length);
+
+    frame[0] = 0x81 // FIN + text frame
+    frame[1] = messageBuffer.length;
+
+    messageBuffer.copy(frame, 2);
+    return frame;
 }
