@@ -1,6 +1,8 @@
 const net = require("net");
 const crypto = require("crypto");
 
+const clients = new Set();
+
 const httpServer = net.createServer((connection) => {
   connection.on("data", () => {
     let content = `<!DOCTYPE html>
@@ -31,9 +33,9 @@ httpServer.listen(3000, () => {
   console.log("HTTP server listening on port 3000");
 });
 
-// Incomplete WebSocket server
 const wsServer = net.createServer((connection) => {
   console.log("Client connected");
+  clients.add(connection);
 
   let isWebSocketUpgraded = false;
 
@@ -48,11 +50,12 @@ const wsServer = net.createServer((connection) => {
     console.log("Raw WebSocket frame received:", data);
     const message = decodeWebSocketFrame(data);
     console.log("Decoded data from client:", message);
-    connection.write(encodeWebSocketFrame("Server received: " + message));
+    broadcast(message);
 });
 
   connection.on("end", () => {
     console.log("Client disconnected");
+    clients.delete(connection);
   });
 });
 
@@ -65,6 +68,13 @@ wsServer.on("error", (error) => {
 wsServer.listen(3001, () => {
   console.log("WebSocket server listening on port 3001");
 });
+
+function broadcast(message) {
+    const frame = encodeWebSocketFrame(message);
+    for (let client of clients) {
+        client.write(frame);
+    }
+}
 
 function extractSecKey(data) {
     data = data.toString();
