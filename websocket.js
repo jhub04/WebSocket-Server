@@ -1,6 +1,6 @@
 const net = require("net");
+const crypto = require("crypto");
 
-// Simple HTTP server responds with a simple WebSocket client test
 const httpServer = net.createServer((connection) => {
   connection.on("data", () => {
     let content = `<!DOCTYPE html>
@@ -35,10 +35,15 @@ httpServer.listen(3000, () => {
 const wsServer = net.createServer((connection) => {
   console.log("Client connected");
 
-  connection.on("data", (data) => {
-    console.log("Data received from client:", data.toString());
+  connection.once("data", (data) => {
+    console.log("\nRecieved handshake request:\n", data.toString());
+    connection.write(performHandshake(data));
+  });
 
-    // Perform ws handshake 
+  connection.on("data", (data) => {
+    console.log("Data received from client:", data);
+    const message = decodeWebSocketFrame(data);
+    console.log("Decoded data from client:", message);
   });
 
   connection.on("end", () => {
@@ -56,8 +61,6 @@ wsServer.listen(3001, () => {
   console.log("WebSocket server listening on port 3001");
 });
 
-// extract Sec-WebSocket-Key
-
 function extractSecKey(data) {
     data = data.toString();
     let lines = data.split("\r\n");
@@ -73,7 +76,26 @@ function extractSecKey(data) {
     return key;
 }
 
+function generateWebSocketAccept(data) {
+    const rfcConstant = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    let key = extractSecKey(data);
+    
+    const combinedKey = key + rfcConstant;
 
+    const acceptKey = crypto.createHash('sha1').update(combinedKey).digest('base64');
 
-// compute Web-Socket-Accept
+    return acceptKey;
+
+}
 // Perform the handshake
+
+function performHandshake(data) {
+    let acceptKey = generateWebSocketAccept(data)
+    let response = 
+    "HTTP/1.1 101 Switching Protocols\r\n" +
+    "Upgrade: websocket\r\n" + 
+    "Connection: Upgrade\r\n" +
+    "Sec-WebSocket-Accept: " + acceptKey + "\r\n\r\n";
+    
+    return response;
+}
