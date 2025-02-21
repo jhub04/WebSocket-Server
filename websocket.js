@@ -37,15 +37,43 @@ const wsServer = net.createServer((connection) => {
 
   connection.on("data", (data) => {
     console.log("Data received from client:", data.toString());
+
+    // Perform ws handshake 
   });
 
   connection.on("end", () => {
     console.log("Client disconnected");
   });
 });
+
+
 wsServer.on("error", (error) => {
   console.error("Error:", error);
 });
+
+
 wsServer.listen(3001, () => {
   console.log("WebSocket server listening on port 3001");
 });
+
+// extract Sec-WebSocket-Key
+
+function extractSecKey(data) {
+    data = data.toString();
+    let lines = data.split("\r\n");
+    let key;
+
+    for (const line of lines) {
+        let keyAndValue = line.split(":");
+
+        if (keyAndValue[0].trim() === "Sec-WebSocket-Key") {
+            key = keyAndValue[1].trim();
+        }
+    }
+    return key;
+}
+
+
+
+// compute Web-Socket-Accept
+// Perform the handshake
