@@ -41,48 +41,76 @@ const wsServer = net.createServer((connection) => {
 
   connection.on("data", (data) => {
     if (!isWebSocketUpgraded) {
-        console.log("\nReceived handshake request:\n", data.toString());
-        connection.write(performHandshake(data));
-        isWebSocketUpgraded = true;
-        return; // Do not process handshake data as a message
+        if(handleHandshake(connection, data)) {
+            isWebSocketUpgraded = true;
+        }
+        return;
     }
-
-    console.log("Raw WebSocket frame received:", data);
-    const message = decodeWebSocketFrame(data);
-    console.log("Decoded data from client:", message);
-    broadcast(message);
+    handleMessage(connection, data);
 });
 
-  connection.on("close", () => {
-    console.log("Client disconnected");
-    clients.delete(connection);
-  });
-
-  connection.on("error", (err) => {
-    console.error("Connection error:", err);
-    clients.delete(connection); 
-  })
+  connection.on("close", () => removeClient(connection, "Client disconnected"));
+  connection.on("error", (err) => removeClient(connection, `Connection error: ${err.message}`));
 });
-
-
-wsServer.on("error", (error) => {
-  console.error("Error:", error);
-});
-
 
 wsServer.listen(3001, () => {
-  console.log("WebSocket server listening on port 3001");
-});
+    console.log("WebSocket server listening on port 3001");
+  });
+
+function handleHandshake(connection, data) {
+    console.log("\nReceived handshake request");
+
+    const acceptKey = generateWebSocketAccept(data);
+    if (!acceptKey) {
+        console.error("Handshake request is missing accept key");
+        connection.end();
+        return false;
+    }
+
+    const response =
+    "HTTP/1.1 101 Switching Protocols\r\n" +
+    "Upgrade: websocket\r\n" +
+    "Connection: Upgrade\r\n" +
+    `Sec-WebSocket-Accept: ${acceptKey}\r\n\r\n`;
+
+    connection.write(response);
+    console.log("Handshake completed successfully");
+    return true;
+}
+
+function handleMessage(connection, data) {
+    console.log("Raw Websocket frame received: ", data);
+
+    const message = decodeWebSocketFrame(data);
+    if (!message) {
+        console.error("Failed to decode websocket frame");
+        return;
+    }
+
+    console.log("Decoded message from client: ", message);
+    broadcast(message);
+}
 
 function broadcast(message) {
     const frame = encodeWebSocketFrame(message);
-    for (let client of clients) {
+    for (const client of clients) {
         if (client.writable) { 
-            client.write(frame);
+            try {
+                client.write(frame);
+            } catch (err) {
+                console.error("Error sending message: ", err.message);
+                removeClient(client, "Removing due to write failure");
+            }
         } else {
-            clients.delete(client); 
+            removeClient(client, "Removing disconnected client");
         }
     }
+}
+
+function removeClient(client, message) {
+    console.log(message);
+    clients.delete(client);
+    client.destroy();
 }
 
 function extractSecKey(data) {
@@ -101,25 +129,12 @@ function extractSecKey(data) {
 }
 
 function generateWebSocketAccept(data) {
-    const rfcConstant = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
     const key = extractSecKey(data);
     if (!key) return null;
     
-    return crypto.createHash('sha1').update(key + rfcConstant).digest('base64');
+    return crypto.createHash('sha1').update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest('base64');
 
-}
-// Perform the handshake
-
-function performHandshake(data) {
-    const acceptKey = generateWebSocketAccept(data);
-    if (!acceptKey) return null;
-    let response = 
-    "HTTP/1.1 101 Switching Protocols\r\n" +
-    "Upgrade: websocket\r\n" + 
-    "Connection: Upgrade\r\n" +
-    "Sec-WebSocket-Accept: " + acceptKey + "\r\n\r\n";
-    
-    return response;
 }
 
 function decodeWebSocketFrame(bytes) {
