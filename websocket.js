@@ -138,6 +138,11 @@ function generateWebSocketAccept(data) {
 }
 
 function decodeWebSocketFrame(bytes) {
+    let firstByte = bytes[0];
+    if ((firstByte & 0b00001111) == 0x8) {
+        return;
+    }
+
     let length = bytes[1] & 127;
     let maskStart = 2;
     let dataStart = maskStart + 4;
