@@ -77,7 +77,11 @@ wsServer.listen(3001, () => {
 function broadcast(message) {
     const frame = encodeWebSocketFrame(message);
     for (let client of clients) {
-        client.write(frame);
+        if (client.writable) { 
+            client.write(frame);
+        } else {
+            clients.delete(client); 
+        }
     }
 }
 
