@@ -93,19 +93,17 @@ function extractSecKey(data) {
 
 function generateWebSocketAccept(data) {
     const rfcConstant = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    let key = extractSecKey(data);
+    const key = extractSecKey(data);
+    if (!key) return null;
     
-    const combinedKey = key + rfcConstant;
-
-    const acceptKey = crypto.createHash('sha1').update(combinedKey).digest('base64');
-
-    return acceptKey;
+    return crypto.createHash('sha1').update(key + rfcConstant).digest('base64');
 
 }
 // Perform the handshake
 
 function performHandshake(data) {
-    let acceptKey = generateWebSocketAccept(data)
+    const acceptKey = generateWebSocketAccept(data);
+    if (!acceptKey) return null;
     let response = 
     "HTTP/1.1 101 Switching Protocols\r\n" +
     "Upgrade: websocket\r\n" + 
