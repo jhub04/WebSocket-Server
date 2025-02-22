@@ -53,10 +53,15 @@ const wsServer = net.createServer((connection) => {
     broadcast(message);
 });
 
-  connection.on("end", () => {
+  connection.on("close", () => {
     console.log("Client disconnected");
     clients.delete(connection);
   });
+
+  connection.on("error", (err) => {
+    console.error("Connection error:", err);
+    clients.delete(connection); 
+  })
 });
 
 
